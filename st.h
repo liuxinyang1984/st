@@ -101,6 +101,7 @@ void printsel(const Arg *);
 void sendbreak(const Arg *);
 void toggleprinter(const Arg *);
 
+int tisaltscreen(void);
 int tattrset(int);
 void tnew(int, int);
 void tresize(int, int);
@@ -136,6 +137,9 @@ void boxdraw_xinit(Display *, Colormap, XftDraw *, Visual *);
 void drawboxes(int, int, int, int, XftColor *, XftColor *, const XftGlyphFontSpec *, int);
 #endif
 
+void kscrollup(const Arg *arg);
+void kscrolldown(const Arg *arg);
+
 /* config.h globals */
 extern char *utmp;
 extern char *scroll;
@@ -149,6 +153,7 @@ extern unsigned int tabspaces;
 extern unsigned int defaultfg;
 extern unsigned int defaultbg;
 extern unsigned int defaultcs;
+extern unsigned int scrollback_lines;
 extern const int boxdraw, boxdraw_bold, boxdraw_braille;
 
 // Accessors to decoration properties stored in `decor`.
