@@ -1119,22 +1119,24 @@ execsh(char *cmd, char **args)
 void
 sigchld(int a)
 {
-	int stat;
+	int stat, olderrno;
 	pid_t p;
 
-	if ((p = waitpid(-1, &stat, WNOHANG)) < 0)
-		die("waiting for pid %hd failed: %s\n", pid, strerror(errno));
+	olderrno = errno;
+	do {
+		p = waitpid(pid, &stat, WNOHANG);
+	} while (p < 0 && errno == EINTR);
+
+	if (p < 0)
+		_exit(1);
 
 	if (pid != p) {
-		/* reinstall sigchld handler */
-		signal(SIGCHLD, sigchld);
+		errno = olderrno;
 		return;
 	}
 
-	if (WIFEXITED(stat) && WEXITSTATUS(stat))
-		die("child exited with status %d\n", WEXITSTATUS(stat));
-	else if (WIFSIGNALED(stat))
-		die("child terminated due to signal %d\n", WTERMSIG(stat));
+	if ((WIFEXITED(stat) && WEXITSTATUS(stat)) || WIFSIGNALED(stat))
+		_exit(1);
 	_exit(0);
 }
 
@@ -3074,6 +3076,7 @@ eschandle(uchar ascii)
 		resettitle();
 		xloadcols();
 		xsetmode(0, MODE_HIDE);
+		xsetmode(0, MODE_BRCKTPASTE);
 		break;
 	case '=': /* DECPAM -- Application keypad */
 		xsetmode(1, MODE_APPKEYPAD);
