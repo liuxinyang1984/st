@@ -1688,8 +1688,11 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 		colfg.green = TRUEGREEN(decorcolor);
 		colfg.blue = TRUEBLUE(decorcolor);
 		XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &colfg, &decor);
-	} else {
+	} else if (decorcolor < dc.collen) {
 		decor = dc.col[decorcolor];
+	} else {
+		/* 非法/越界索引（如误把 placement 相关值当 palette）时回退到 fg，避免 SIGSEGV */
+		decor = *fg;
 	}
 	decor.color.alpha = 0xffff;
 	decor.pixel |= 0xff << 24;
