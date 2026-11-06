@@ -114,8 +114,8 @@ char *termname = "st-256color";
  */
 unsigned int tabspaces = 8;
 
-/* bg opacity */
-float alpha = 0.8;
+/* bg opacity：交由 picom（失焦半透+模糊；焦点不透明）。勿在此开假透明。 */
+float alpha = 1.0;
 
 /* Terminal colors (16 first used in escape sequence)
  * Gruvbox Dark — 与 neovim gruvbox.nvim 对齐
