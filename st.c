@@ -549,7 +549,11 @@ selscrollback(int delta)
 	sel.ob.y += delta;
 	sel.oe.y += delta;
 
-	if (sel.ne.y < 0 || sel.nb.y >= term.row)
+	/* 任一端离开可见区就清选区，避免 renderline 拿到越界 y */
+	if (sel.nb.y < 0 || sel.ne.y < 0
+			|| sel.nb.y >= term.row || sel.ne.y >= term.row
+			|| sel.ob.y < 0 || sel.oe.y < 0
+			|| sel.ob.y >= term.row || sel.oe.y >= term.row)
 		selclear();
 
 	sb_view_changed();
@@ -580,9 +584,15 @@ static Line
 renderline(int y)
 {
 	int start, v;
+	Line line;
 
-	if (sb.view_offset <= 0)
-		return term.line[y];
+	if (y < 0 || y >= term.row)
+		return emptyline();
+
+	if (sb.view_offset <= 0) {
+		line = term.line[y];
+		return line ? line : emptyline();
+	}
 
 	start = sb.len - sb.view_offset; /* can be negative */
 	v = start + y;
@@ -590,13 +600,17 @@ renderline(int y)
 	if (v < 0)
 		return emptyline();
 
-	if (v < sb.len)
-		return sb_get(v);
+	if (v < sb.len) {
+		line = sb_get(v);
+		return line ? line : emptyline();
+	}
 
 	/* past scrollback -> into current screen */
 	v -= sb.len;
-	if (v >= 0 && v < term.row)
-		return term.line[v];
+	if (v >= 0 && v < term.row) {
+		line = term.line[v];
+		return line ? line : emptyline();
+	}
 
 	return emptyline();
 }
@@ -792,6 +806,10 @@ static int
 tlinelen(Line line)
 {
 	int i = term.col;
+
+	/* scrollback 槽位可能为空；selection 拖选时 y 也可能越界 */
+	if (!line || term.col <= 0)
+		return 0;
 	if (line[i - 1].mode & ATTR_WRAP)
 		return i;
 	while (i > 0 && line[i - 1].u == ' ')
@@ -2152,8 +2170,15 @@ tsetmode(int priv, int set, const int *args, int narg)
 			case 1006: /* 1006: extended reporting mode */
 				xsetmode(set, MODE_MOUSESGR);
 				break;
-			case 1034: /* 1034: enable 8-bit mode for keyboard input */
-				xsetmode(set, MODE_8BIT);
+			case 1034: /* 1034: 8-bit meta keyboard (legacy) */
+				/*
+				 * 忽略开启：远端（部分云主机 profile/readline）会发
+				 * CSI ? 1034 h，使 Alt+b 变成 0xE2（显示为 â）而非 ESC b，
+				 * SSH 上 meta 快捷键失效。与 Alacritty alt_send_esc 一致，
+				 * 始终用 ESC 前缀。仍允许关闭以清状态。
+				 */
+				if (!set)
+					xsetmode(0, MODE_8BIT);
 				break;
 			case 1049: /* swap screen & set/restore cursor as xterm */
 				if (!allowaltscreen)

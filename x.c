@@ -1586,8 +1586,10 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 		colfg.blue = TRUEBLUE(base.fg);
 		XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &colfg, &truefg);
 		fg = &truefg;
-	} else {
+	} else if (base.fg < dc.collen) {
 		fg = &dc.col[base.fg];
+	} else {
+		fg = &dc.col[defaultfg];
 	}
 
 	if (IS_TRUECOL(base.bg)) {
@@ -1597,8 +1599,10 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 		colbg.blue = TRUEBLUE(base.bg);
 		XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &colbg, &truebg);
 		bg = &truebg;
-	} else {
+	} else if (base.bg < dc.collen) {
 		bg = &dc.col[base.bg];
+	} else {
+		bg = &dc.col[defaultbg];
 	}
 
 	/* Change basic system colors [0-7] to bright system colors [8-15] */
@@ -2216,6 +2220,17 @@ kmap(KeySym k, uint state)
 		if (IS_SET(MODE_APPCURSOR) ? kp->appcursor < 0 : kp->appcursor > 0)
 			continue;
 
+		/*
+		 * fixkeys 补丁为 Alt 配了大量 kitty CSI-u（形如 \033[…;3u）。
+		 * SSH/bash/readline 不懂该协议，会把 ;3u 打到屏幕上。
+		 * 有 Alt 时跳过这类序列，改走下方 Meta→ESC 或传统 \033[1;3A 等。
+		 */
+		if ((state & Mod1Mask) && kp->s && kp->s[0] == '\033') {
+			size_t n = strlen(kp->s);
+			if (n > 0 && kp->s[n - 1] == 'u')
+				continue;
+		}
+
 		return kp->s;
 	}
 
@@ -2229,7 +2244,6 @@ kpress(XEvent *ev)
 	KeySym ksym = NoSymbol;
 	char buf[64], *customkey;
 	int len;
-	Rune c;
 	Status status;
 	Shortcut *bp;
 
@@ -2240,6 +2254,15 @@ kpress(XEvent *ev)
 		len = XmbLookupString(xw.ime.xic, e, buf, sizeof buf, &ksym, &status);
 		if (status == XBufferOverflow)
 			return;
+		/*
+		 * fcitx5/XIM 常把 Alt+键吞成 len=0（XLookupNone），导致 Meta→ESC
+		 * 前缀发不出去；SSH/readline 的 Alt-b/f 等会失效。Alacritty/foot
+		 * 不依赖这套 XIM 路径。有 Mod1 且无有效字符时回退 XLookupString。
+		 */
+		if ((e->state & Mod1Mask)
+				&& (len == 0 || status == XLookupNone || status == XLookupKeySym)) {
+			len = XLookupString(e, buf, sizeof buf, &ksym, NULL);
+		}
 	} else {
 		len = XLookupString(e, buf, sizeof buf, &ksym, NULL);
 	}
@@ -2261,16 +2284,10 @@ kpress(XEvent *ev)
 	if (len == 0)
 		return;
 	if (len == 1 && e->state & Mod1Mask) {
-		if (IS_SET(MODE_8BIT)) {
-			if (*buf < 0177) {
-				c = *buf | 0x80;
-				len = utf8encode(c, buf);
-			}
-		} else {
-			buf[1] = buf[0];
-			buf[0] = '\033';
-			len = 2;
-		}
+		/* 始终 Meta→ESC（不用 8-bit meta）；见 CSI 1034 注释 */
+		buf[1] = buf[0];
+		buf[0] = '\033';
+		len = 2;
 	}
 	ttywrite(buf, len, 1);
 }

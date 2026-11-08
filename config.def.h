@@ -53,8 +53,8 @@ static unsigned int tripleclicktimeout = 600;
 int allowaltscreen = 1;
 
 /* allow certain non-interactive (insecure) window operations such as:
-   setting the clipboard text */
-int allowwindowops = 0;
+   setting the clipboard text（OSC 52；tmux set-clipboard external 依赖此项） */
+int allowwindowops = 1;
 
 /*
  * draw latency range in ms - from new content/keypress/etc until drawing.
@@ -445,14 +445,20 @@ static Key key[] = {
 	{ XK_BackSpace,     Mod1Mask,       "\033\177",      0,    0},
 	{ XK_Home,          ShiftMask,      "\033[2J",       0,   -1},
 	{ XK_Home,          ShiftMask,      "\033[1;2H",     0,   +1},
+	{ XK_Home,          Mod1Mask,       "\033[1;3H",     0,    0},
 	{ XK_End,           ControlMask,    "\033[J",       -1,    0},
 	{ XK_End,           ControlMask,    "\033[1;5F",    +1,    0},
 	{ XK_End,           ShiftMask,      "\033[K",       -1,    0},
 	{ XK_End,           ShiftMask,      "\033[1;2F",    +1,    0},
+	{ XK_End,           Mod1Mask,       "\033[1;3F",     0,    0},
 	{ XK_Prior,         ControlMask,    "\033[5;5~",     0,    0},
 	{ XK_Prior,         ShiftMask,      "\033[5;2~",     0,    0},
+	{ XK_Prior,         Mod1Mask,       "\033[5;3~",     0,    0},
 	{ XK_Next,          ControlMask,    "\033[6;5~",     0,    0},
 	{ XK_Next,          ShiftMask,      "\033[6;2~",     0,    0},
+	{ XK_Next,          Mod1Mask,       "\033[6;3~",     0,    0},
+	{ XK_Delete,        Mod1Mask,       "\033[3;3~",     0,    0},
+	{ XK_Insert,        Mod1Mask,       "\033[2;3~",     0,    0},
 	{ XK_F1,            XK_NO_MOD,      "\033OP" ,       0,    0},
 	{ XK_F1, /* F13 */  ShiftMask,      "\033[1;2P",     0,    0},
 	{ XK_F1, /* F25 */  ControlMask,    "\033[1;5P",     0,    0},
