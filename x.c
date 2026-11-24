@@ -6,6 +6,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/select.h>
 #include <time.h>
 #include <unistd.h>
@@ -196,6 +197,8 @@ static void selrequest(XEvent *);
 static void setsel(char *, Time);
 static void mousesel(XEvent *, int);
 static void mousereport(XEvent *);
+static void selscroll_update_dir(int);
+static void selscroll_tick(void);
 static char *kmap(KeySym, uint);
 static int match(uint, uint);
 
@@ -234,6 +237,14 @@ static XWindow xw;
 static XSelection xsel;
 static TermWindow win;
 static unsigned int mouse_col = 0, mouse_row = 0;
+
+/* 选区拖到顶/底边：停住时自动滚历史（上→更早，下→回新） */
+static int selscrolling;
+static int selscroll_dir; /* -1 上, +1 下, 0 关 */
+static int selscroll_x, selscroll_y;
+static uint selscroll_state;
+static struct timespec selscroll_last;
+enum { SELSCROLL_MS = 40 };
 
 /* Font Ring Cache */
 enum {
@@ -596,6 +607,12 @@ bpress(XEvent *e)
 		xsel.tclick1 = now;
 
 		selstart(evcol(e), evrow(e), snap);
+		selscrolling = 1;
+		selscroll_x = e->xbutton.x;
+		selscroll_y = e->xbutton.y;
+		selscroll_state = e->xbutton.state;
+		selscroll_update_dir(evrow(e));
+		clock_gettime(CLOCK_MONOTONIC, &selscroll_last);
 	}
 }
 
@@ -805,8 +822,55 @@ brelease(XEvent *e)
 
 	if (mouseaction(e, 1))
 		return;
-	if (btn == Button1)
+	if (btn == Button1) {
 		mousesel(e, 1);
+		selscrolling = 0;
+		selscroll_dir = 0;
+	}
+}
+
+static void
+selscroll_update_dir(int row)
+{
+	int rows;
+
+	rows = win.ch ? win.th / win.ch : 1;
+	rows = MAX(1, rows);
+	if (row <= 0)
+		selscroll_dir = -1;
+	else if (row >= rows - 1)
+		selscroll_dir = +1;
+	else
+		selscroll_dir = 0;
+}
+
+/* 停在顶/底边时按间隔滚历史并延伸选区 */
+static void
+selscroll_tick(void)
+{
+	Arg a = {.i = 1};
+	XEvent ev;
+	struct timespec now;
+
+	if (!selscrolling || !selscroll_dir || tisaltscreen())
+		return;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	if (TIMEDIFF(now, selscroll_last) < SELSCROLL_MS)
+		return;
+	selscroll_last = now;
+
+	if (selscroll_dir < 0)
+		kscrollup(&a);
+	else
+		kscrolldown(&a);
+
+	memset(&ev, 0, sizeof(ev));
+	ev.type = MotionNotify;
+	ev.xmotion.x = selscroll_x;
+	ev.xmotion.y = selscroll_y;
+	ev.xmotion.state = Button1Mask | (selscroll_state & ~Button1Mask);
+	mousesel(&ev, 0);
 }
 
 void
@@ -815,6 +879,13 @@ bmotion(XEvent *e)
 	if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forcemousemod)) {
 		mousereport(e);
 		return;
+	}
+
+	if (selscrolling) {
+		selscroll_x = e->xmotion.x;
+		selscroll_y = e->xmotion.y;
+		selscroll_state = e->xmotion.state;
+		selscroll_update_dir(evrow(e));
 	}
 
 	mousesel(e, 0);
@@ -2366,6 +2437,11 @@ run(void)
 					      : MIN(timeout,
 						    graphics_next_redraw_delay);
 
+		/* 选区顶/底边自动滚屏：缩短 select 等待 */
+		if (selscrolling && selscroll_dir)
+			timeout = timeout < 0 ? SELSCROLL_MS
+					      : MIN(timeout, SELSCROLL_MS);
+
 		seltv.tv_sec = timeout / 1E3;
 		seltv.tv_nsec = 1E6 * (timeout - 1E3 * seltv.tv_sec);
 		tv = timeout >= 0 ? &seltv : NULL;
@@ -2389,6 +2465,8 @@ run(void)
 			if (handler[ev.type])
 				(handler[ev.type])(&ev);
 		}
+
+		selscroll_tick();
 
 		/*
 		 * To reduce flicker and tearing, when new content or event

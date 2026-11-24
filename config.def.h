@@ -1100,6 +1100,8 @@ static Key key[] = {
 	{ XK_semicolon,    Mod1Mask|ControlMask,           "\033[59;7u",  0,  0},
 	{ XK_semicolon,    Mod1Mask|ControlMask|ShiftMask, "\033[59;8u",  0,  0},
 	{ XK_semicolon,    Mod1Mask|ShiftMask,             "\033[59;4u",  0,  0},
+	/* Ctrl+/：CSI-u（与 Alacritty/kitty 一致），避免传统终端落成 ASCII 0x1F / <C-_> */
+	{ XK_slash,        ControlMask,                    "\033[47;5u",  0,  0},
 	{ XK_slash,        ControlMask|ShiftMask,          "\033[47;6u",  0,  0},
 	{ XK_slash,        Mod1Mask,                       "\033[47;3u",  0,  0},
 	{ XK_slash,        Mod1Mask|ControlMask,           "\033[47;7u",  0,  0},
