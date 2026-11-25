@@ -549,11 +549,11 @@ selscrollback(int delta)
 	sel.ob.y += delta;
 	sel.oe.y += delta;
 
-	/* 任一端离开可见区就清选区，避免 renderline 拿到越界 y */
-	if (sel.nb.y < 0 || sel.ne.y < 0
-			|| sel.nb.y >= term.row || sel.ne.y >= term.row
-			|| sel.ob.y < 0 || sel.oe.y < 0
-			|| sel.ob.y >= term.row || sel.oe.y >= term.row)
+	/*
+	 * 仅当整段选区都滚出视口时才清掉。端点越界是边沿拖选/滚轮续选的正常状态；
+	 * 高亮靠 selected()，拷贝靠 renderline 把相对 y 映进 scrollback。
+	 */
+	if (sel.ne.y < 0 || sel.nb.y >= term.row)
 		selclear();
 
 	sb_view_changed();
@@ -586,10 +586,10 @@ renderline(int y)
 	int start, v;
 	Line line;
 
-	if (y < 0 || y >= term.row)
-		return emptyline();
-
+	/* 未回滚时只有屏幕行；回滚视口外的相对 y 仍映射到 scrollback，供跨屏选区拷贝 */
 	if (sb.view_offset <= 0) {
+		if (y < 0 || y >= term.row)
+			return emptyline();
 		line = term.line[y];
 		return line ? line : emptyline();
 	}
