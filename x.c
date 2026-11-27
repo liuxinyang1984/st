@@ -1538,7 +1538,9 @@ xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len, int x
 			FcCharSetAddChar(fccharset, rune);
 			FcPatternAddCharSet(fcpattern, FC_CHARSET,
 					fccharset);
-			FcPatternAddBool(fcpattern, FC_SCALABLE, 1);
+			/* 勿强制 FC_SCALABLE：否则中文/缺字回退会丢掉 OTB，改走 TTF。
+			 * Sol7 monospace 已在 fontconfig 钉 scalable=false；缺 Nerd 等码点则方块。 */
+			/* FcPatternAddBool(fcpattern, FC_SCALABLE, 1); */
 
 			FcConfigSubstitute(0, fcpattern,
 					FcMatchPattern);
